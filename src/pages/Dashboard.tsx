@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useSupabase } from '../hooks/useSupabase';
 import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
@@ -29,7 +29,6 @@ interface QuestionRow {
 }
 
 const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
   const { supabase, user, signOut } = useSupabase();
   const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

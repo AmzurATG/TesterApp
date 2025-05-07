@@ -5,12 +5,13 @@ import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
 import Dialog from '../components/Dialog';
 import Papa from 'papaparse';
-import { LogOut, Plus, Trash2, Upload } from 'lucide-react';
+import { LogOut, Plus, Trash2, Upload, Settings } from 'lucide-react';
 
 interface Test {
   test_id: string;
   title: string;
   time_limit: number;
+  questions_count?: number;
   created_at: string;
   created_by: string;
   creator_name?: string;
@@ -44,6 +45,14 @@ const Dashboard: React.FC = () => {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Test configuration state
+  const [isConfigDialogOpen, setIsConfigDialogOpen] = useState<boolean>(false);
+  const [configTestId, setConfigTestId] = useState<string | null>(null);
+  const [configTestTitle, setConfigTestTitle] = useState<string>('');
+  const [configTimeLimit, setConfigTimeLimit] = useState<number>(20);
+  const [configQuestionsCount, setConfigQuestionsCount] = useState<number>(10);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchUserAndTests = async () => {
@@ -81,15 +90,12 @@ const Dashboard: React.FC = () => {
           }
         }
 
+        // Updated query to properly join with users table
         const { data: testsData, error: testsError } = await supabase
           .from('tests')
           .select(`
-            test_id,
-            title,
-            time_limit,
-            created_at,
-            created_by,
-            users(name)
+            *,
+            users:created_by(name)
           `)
           .order('created_at', { ascending: false });
 
@@ -99,9 +105,10 @@ const Dashboard: React.FC = () => {
           test_id: test.test_id,
           title: test.title,
           time_limit: test.time_limit,
+          questions_count: test.questions_count,
           created_at: test.created_at,
           created_by: test.created_by,
-          creator_name: (test.users && test.users[0]?.name) || 'Unknown User'
+          creator_name: test.users?.name || 'Unknown User'
         }));
 
         setTests(formattedTests);
@@ -280,6 +287,41 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleUpdateTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!configTestId) return;
+
+    try {
+      setIsUpdating(true);
+
+      const { error: testError } = await supabase
+        .from('tests')
+        .update({
+          title: configTestTitle,
+          time_limit: configTimeLimit,
+          questions_count: configQuestionsCount
+        })
+        .eq('test_id', configTestId);
+
+      if (testError) throw testError;
+
+      setTests(tests.map(test => 
+        test.test_id === configTestId 
+          ? { ...test, title: configTestTitle, time_limit: configTimeLimit, questions_count: configQuestionsCount }
+          : test
+      ));
+
+      setIsConfigDialogOpen(false);
+      alert('Test updated successfully!');
+    } catch (error) {
+      console.error('Error updating test:', error);
+      alert('Error updating test. Please try again.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   if (loading || signingOut) {
     return (
       <div className="min-h-screen flex justify-center items-center bg-gray-100">
@@ -341,15 +383,31 @@ const Dashboard: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span>{test.title}</span>
                       {test.created_by === user?.id && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDeleteTest(test.test_id)}
-                          isLoading={deletingTestId === test.test_id}
-                          className="flex items-center"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="flex items-center"
+                            onClick={() => {
+                              setConfigTestId(test.test_id);
+                              setConfigTestTitle(test.title);
+                              setConfigTimeLimit(test.time_limit);
+                              setConfigQuestionsCount(test.questions_count || 10);
+                              setIsConfigDialogOpen(true);
+                            }}
+                          >
+                            <Settings size={14} />
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteTest(test.test_id)}
+                            isLoading={deletingTestId === test.test_id}
+                            className="flex items-center"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </CardTitle>
@@ -467,6 +525,76 @@ const Dashboard: React.FC = () => {
                 disabled={csvData.length === 0 || !!csvError}
               >
                 Create Test
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+
+        {/* Test Configuration Dialog */}
+        <Dialog 
+          isOpen={isConfigDialogOpen} 
+          onClose={() => setIsConfigDialogOpen(false)}
+          title="Configure Test"
+          maxWidth="lg"
+        >
+          <form onSubmit={handleUpdateTest}>
+            <div className="mb-4">
+              <label htmlFor="configTestTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                Test Title
+              </label>
+              <input
+                id="configTestTitle"
+                type="text"
+                value={configTestTitle}
+                onChange={(e) => setConfigTestTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="configTimeLimit" className="block text-sm font-medium text-gray-700 mb-1">
+                Time Limit (minutes)
+              </label>
+              <input
+                id="configTimeLimit"
+                type="number"
+                min="1"
+                value={configTimeLimit}
+                onChange={(e) => setConfigTimeLimit(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="configQuestionsCount" className="block text-sm font-medium text-gray-700 mb-1">
+                Number of Questions
+              </label>
+              <input
+                id="configQuestionsCount"
+                type="number"
+                min="1"
+                value={configQuestionsCount}
+                onChange={(e) => setConfigQuestionsCount(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={() => setIsConfigDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                isLoading={isUpdating}
+              >
+                Update Test
               </Button>
             </div>
           </form>

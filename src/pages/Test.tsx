@@ -4,6 +4,7 @@ import { useSupabase } from '../hooks/useSupabase';
 import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Clock, ArrowLeft } from 'lucide-react';
+import Dialog from '../components/Dialog';
 
 interface Question {
   question_id: string;
@@ -20,22 +21,23 @@ interface UserAnswer {
   selectedOption: string;
 }
 
-interface Test {
+interface TestDetailsType {
   test_id: string;
   title: string;
   time_limit: number;
+  questions_count: number;
   created_at: string;
   created_by: string;
 }
 
-const Test: React.FC = () => {
+const TestPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const { supabase, user } = useSupabase();
   
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [test, setTest] = useState<Test | null>(null);
+  const [test, setTest] = useState<TestDetailsType | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -43,6 +45,18 @@ const Test: React.FC = () => {
   const [testCompleted, setTestCompleted] = useState<boolean>(false);
   const [score, setScore] = useState<{ correct: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogContent, setDialogContent] = useState<React.ReactNode | null>(null);
+  
+  const openDialog = (content: React.ReactNode) => {
+    setDialogContent(content);
+    setIsDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setDialogContent(null);
+  };
 
   const handleSubmitTest = useCallback(async () => {
     if (submitting) return;
@@ -52,15 +66,57 @@ const Test: React.FC = () => {
       
       // Calculate score
       let correctCount = 0;
+      console.log('--- Test Score Debugging ---');
+      console.log(`Total questions: ${questions.length}`);
+      console.log('Current user answers:', userAnswers);
+      
       questions.forEach((question) => {
         const userAnswer = userAnswers.find(a => a.question_id === question.question_id);
+        const selectedOptionIndex = userAnswer?.selectedOption || '';
         const options = JSON.parse(question.options);
-        const selectedOptionIndex = parseInt(userAnswer?.selectedOption || '-1');
         
-        if (selectedOptionIndex >= 0 && options[selectedOptionIndex] === question.correct_answer) {
+        console.log('Question:', question.question_text);
+        console.log('User answer index:', selectedOptionIndex);
+        console.log('User selected option:', selectedOptionIndex !== '' ? options[parseInt(selectedOptionIndex)] : 'Not answered');
+        console.log('Stored correct answer:', question.correct_answer);
+        
+        // Check if the user's answer matches the correct answer
+        // The correct_answer is stored in "Option X" format where X is the 1-based index
+        let isCorrect = false;
+        
+        if (selectedOptionIndex !== '') {
+          // Handle "Option X" format (1-based) vs selectedOptionIndex (0-based)
+          if (question.correct_answer.startsWith('Option ')) {
+            // Extract the number from "Option X" (which is 1-based)
+            const correctOptionNumber = parseInt(question.correct_answer.replace('Option ', ''));
+            // Adjust for 0-based index in our selections
+            const correctOptionIndex = (correctOptionNumber - 1).toString();
+            
+            console.log('Parsed correct option number:', correctOptionNumber);
+            console.log('Corresponding 0-based index:', correctOptionIndex);
+            
+            if (selectedOptionIndex === correctOptionIndex) {
+              isCorrect = true;
+            }
+          } 
+          // Fallback to the old methods for backward compatibility
+          else if (question.correct_answer === selectedOptionIndex) {
+            isCorrect = true;
+          } 
+          else if (question.correct_answer === options[parseInt(selectedOptionIndex)]) {
+            isCorrect = true;
+          }
+        }
+        
+        console.log('Is answer correct?', isCorrect);
+        console.log('------------------------');
+        
+        if (isCorrect) {
           correctCount++;
         }
       });
+      
+      console.log(`Final score: ${correctCount}/${questions.length} (${(correctCount / questions.length * 100).toFixed(2)}%)`);
       
       const scoreData = {
         correct: correctCount,
@@ -73,6 +129,9 @@ const Test: React.FC = () => {
         user_id: user?.id,
         test_id: testId,
         score: correctCount,
+        total_questions: questions.length,
+        percentage: (correctCount / questions.length) * 100,
+        completed_at: new Date().toISOString(),
       });
       
       setTestCompleted(true);
@@ -138,10 +197,23 @@ const Test: React.FC = () => {
         }
 
         console.log(`Loaded ${questionsData.length} questions`);
-        setQuestions(questionsData);
+        
+        // Randomly sample questions based on questions_count
+        let selectedQuestions = questionsData;
+        
+        // If questions_count is set and less than total questions, randomly sample
+        if (testData.questions_count && testData.questions_count < questionsData.length) {
+          // Shuffle the questions array for random selection
+          const shuffled = [...questionsData].sort(() => 0.5 - Math.random());
+          // Take only the first n questions (where n is questions_count)
+          selectedQuestions = shuffled.slice(0, testData.questions_count);
+          console.log(`Randomly selected ${selectedQuestions.length} out of ${questionsData.length} questions`);
+        }
+        
+        setQuestions(selectedQuestions);
         
         // Initialize user answers
-        const initialAnswers = questionsData.map(q => ({
+        const initialAnswers = selectedQuestions.map(q => ({
           question_id: q.question_id,
           selectedOption: ''
         }));
@@ -177,13 +249,36 @@ const Test: React.FC = () => {
   }, [loading, testCompleted, timeRemaining, handleSubmitTest]);
 
   const handleAnswerSelect = (questionId: string, option: string) => {
-    setUserAnswers(prevAnswers => 
-      prevAnswers.map(answer => 
-        answer.question_id === questionId 
-          ? { ...answer, selectedOption: option } 
-          : answer
-      )
-    );
+    console.log('Answer selected:', { questionId, optionIndex: option });
+    const question = questions.find(q => q.question_id === questionId);
+    
+    if (question) {
+      const options = JSON.parse(question.options);
+      console.log('Question:', question.question_text);
+      console.log('Selected option text:', options[parseInt(option)]);
+    }
+    
+    // Update the answers with the new selection using functional state update
+    setUserAnswers(prevAnswers => {
+      // Find if answer exists
+      const existingAnswerIndex = prevAnswers.findIndex(a => a.question_id === questionId);
+      
+      if (existingAnswerIndex !== -1) {
+        // Create a new array with the updated answer
+        const newAnswers = [...prevAnswers];
+        newAnswers[existingAnswerIndex] = { 
+          ...newAnswers[existingAnswerIndex], 
+          selectedOption: option 
+        };
+        console.log('Updated answers state:', newAnswers);
+        return newAnswers;
+      } else {
+        // If it doesn't exist for some reason, add it
+        const newAnswers = [...prevAnswers, { question_id: questionId, selectedOption: option }];
+        console.log('Updated answers state (added new):', newAnswers);
+        return newAnswers;
+      }
+    });
   };
 
   const navigateToQuestion = (index: number) => {
@@ -392,8 +487,37 @@ const Test: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {test && (
+        <Card className="test-details-card">
+          <Button 
+            onClick={() => openDialog(
+              <div className="dialog-content">
+                <h3>Start Test: {test.title}</h3>
+                <p>You will have {test.time_limit} minutes to complete this test.</p>
+                <p>Total questions: {test.questions_count}</p>
+                <Button onClick={() => {
+                  // Start test logic here
+                  closeDialog();
+                }}>Start Now</Button>
+                <Button onClick={closeDialog}>Cancel</Button>
+              </div>
+            )}
+          >
+            Start Test
+          </Button>
+        </Card>
+      )}
+
+      <Dialog 
+        isOpen={isDialogOpen}
+        onClose={closeDialog}
+        title={test ? `${test.title}` : "Test Information"}
+      >
+        {dialogContent}
+      </Dialog>
     </div>
   );
 };
 
-export default Test;
+export default TestPage;

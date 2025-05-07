@@ -4,7 +4,7 @@ import { useSupabase } from './hooks/useSupabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
-import Test from './pages/Test';
+import TestPage from './pages/Test';
 
 // Protected route wrapper component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -41,7 +41,7 @@ function App() {
         } />
         <Route path="/test/:testId" element={
           <ProtectedRoute>
-            <Test />
+            <TestPage />
           </ProtectedRoute>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />

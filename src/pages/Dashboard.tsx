@@ -252,6 +252,31 @@ const Dashboard: React.FC = () => {
     try {
       setDeletingTestId(testId);
 
+      // First delete test results/attempts if they exist
+      const { error: resultsError } = await supabase
+        .from('test_results')
+        .delete()
+        .eq('test_id', testId);
+
+      if (resultsError) {
+        console.error('Error deleting test results:', resultsError);
+        // Continue with deletion even if there's an error with results
+        // as they might not exist
+      }
+
+      // Then delete test attempts if they exist
+      const { error: attemptsError } = await supabase
+        .from('test_attempts')
+        .delete()
+        .eq('test_id', testId);
+
+      if (attemptsError) {
+        console.error('Error deleting test attempts:', attemptsError);
+        // Continue with deletion even if there's an error with attempts
+        // as they might not exist
+      }
+
+      // Delete questions
       const { error: questionsError } = await supabase
         .from('questions')
         .delete()
@@ -259,6 +284,7 @@ const Dashboard: React.FC = () => {
 
       if (questionsError) throw questionsError;
 
+      // Finally delete the test
       const { error: testError } = await supabase
         .from('tests')
         .delete()

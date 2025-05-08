@@ -37,10 +37,11 @@ export const useSupabase = () => {
   }, []);
   
   const signInWithGoogle = async () => {
+    const url="https://tester-app-alpha.vercel.app/"
     const { error } = await supabase.auth.signInWithOAuth({ 
       provider: 'google',
       options: {
-        redirectTo: process.env.REACT_APP_API_URL || window.location.origin
+        redirectTo: url || window.location.origin
       }
     });
     return { error };

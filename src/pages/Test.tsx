@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSupabase } from '../hooks/useSupabase';
 import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
-import { Clock, ArrowLeft } from 'lucide-react';
+import { Clock, ArrowLeft, Check } from 'lucide-react';
 import Dialog from '../components/Dialog';
 
 interface Question {
@@ -225,16 +225,46 @@ const TestPage: React.FC = () => {
 
         console.log(`Loaded ${questionsData.length} questions`);
         
-        // Randomly sample questions based on questions_count
-        let selectedQuestions = questionsData;
+        // Group questions by category
+        const questionsByCategory = questionsData.reduce((acc, question) => {
+          if (!acc[question.category]) {
+            acc[question.category] = [];
+          }
+          acc[question.category].push(question);
+          return acc;
+        }, {} as Record<string, Question[]>);
+
+        const categories = Object.keys(questionsByCategory);
+        const totalCategories = categories.length;
         
-        // If questions_count is set and less than total questions, randomly sample
+        // If questions_count is set and less than total questions, sample evenly from categories
+        let selectedQuestions: Question[] = questionsData;
+        
         if (testData.questions_count && testData.questions_count < questionsData.length) {
-          // Shuffle the questions array for random selection
-          const shuffled = [...questionsData].sort(() => 0.5 - Math.random());
-          // Take only the first n questions (where n is questions_count)
-          selectedQuestions = shuffled.slice(0, testData.questions_count);
-          console.log(`Randomly selected ${selectedQuestions.length} out of ${questionsData.length} questions`);
+          // Calculate questions per category (rounded down)
+          const baseQuestionsPerCategory = Math.floor(testData.questions_count / totalCategories);
+          
+          // Calculate remaining questions to distribute
+          let remainingQuestions = testData.questions_count - (baseQuestionsPerCategory * totalCategories);
+          
+          selectedQuestions = [];
+          
+          // Sample from each category
+          categories.forEach(category => {
+            const categoryQuestions = questionsByCategory[category];
+            // Add one extra question from this category if we have remaining questions
+            const questionsToTake = baseQuestionsPerCategory + (remainingQuestions > 0 ? 1 : 0);
+            remainingQuestions--;
+            
+            // Shuffle and take required number of questions
+            const shuffled = [...categoryQuestions].sort(() => 0.5 - Math.random());
+            selectedQuestions.push(...shuffled.slice(0, questionsToTake));
+          });
+
+          // Final shuffle of selected questions
+          selectedQuestions = selectedQuestions.sort(() => 0.5 - Math.random());
+          
+          console.log(`Randomly selected ${selectedQuestions.length} questions across ${totalCategories} categories`);
         }
         
         setQuestions(selectedQuestions);
@@ -351,18 +381,21 @@ const TestPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-100 py-10">
         <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-2xl font-bold text-center mb-6">Test Completed</h1>
-          
-          <div className="text-center mb-8">
-            <div className="text-5xl font-bold text-blue-600 mb-2">
-              {score.correct}/{score.total}
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <Check className="w-8 h-8 text-green-500" strokeWidth={3} />
             </div>
-            <p className="text-gray-600">
-              You scored {score.correct} out of {score.total} questions correctly.
-            </p>
-          </div>
-          
-          <div className="flex justify-center">
+            <h1 className="text-2xl font-bold text-center mb-6">Test Completed</h1>
+            
+            <div className="text-center mb-8">
+              <p className="text-gray-600">
+                Thank you for completing the test. Your responses have been recorded.
+              </p>
+              <p className="text-gray-500 mt-2">
+                The test administrator will review your submission.
+              </p>
+            </div>
+            
             <Button onClick={() => navigate('/dashboard')}>
               Return to Dashboard
             </Button>

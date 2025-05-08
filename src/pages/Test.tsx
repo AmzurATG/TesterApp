@@ -66,19 +66,19 @@ const TestPage: React.FC = () => {
       
       // Calculate score
       let correctCount = 0;
-      console.log('--- Test Score Debugging ---');
-      console.log(`Total questions: ${questions.length}`);
-      console.log('Current user answers:', userAnswers);
+      // console.log('--- Test Score Debugging ---');
+      // console.log(`Total questions: ${questions.length}`);
+      // console.log('Current user answers:', userAnswers);
       
       questions.forEach((question) => {
         const userAnswer = userAnswers.find(a => a.question_id === question.question_id);
         const selectedOptionIndex = userAnswer?.selectedOption || '';
         const options = JSON.parse(question.options);
         
-        console.log('Question:', question.question_text);
-        console.log('User answer index:', selectedOptionIndex);
-        console.log('User selected option:', selectedOptionIndex !== '' ? options[parseInt(selectedOptionIndex)] : 'Not answered');
-        console.log('Stored correct answer:', question.correct_answer);
+        // console.log('Question:', question.question_text);
+        // console.log('User answer index:', selectedOptionIndex);
+        // console.log('User selected option:', selectedOptionIndex !== '' ? options[parseInt(selectedOptionIndex)] : 'Not answered');
+        // console.log('Stored correct answer:', question.correct_answer);
         
         // Check if the user's answer matches the correct answer
         // The correct_answer is stored in "Option X" format where X is the 1-based index
@@ -92,8 +92,8 @@ const TestPage: React.FC = () => {
             // Adjust for 0-based index in our selections
             const correctOptionIndex = (correctOptionNumber - 1).toString();
             
-            console.log('Parsed correct option number:', correctOptionNumber);
-            console.log('Corresponding 0-based index:', correctOptionIndex);
+            // console.log('Parsed correct option number:', correctOptionNumber);
+            // console.log('Corresponding 0-based index:', correctOptionIndex);
             
             if (selectedOptionIndex === correctOptionIndex) {
               isCorrect = true;
@@ -108,15 +108,15 @@ const TestPage: React.FC = () => {
           }
         }
         
-        console.log('Is answer correct?', isCorrect);
-        console.log('------------------------');
+        // console.log('Is answer correct?', isCorrect);
+        // console.log('------------------------');
         
         if (isCorrect) {
           correctCount++;
         }
       });
       
-      console.log(`Final score: ${correctCount}/${questions.length} (${(correctCount / questions.length * 100).toFixed(2)}%)`);
+      // console.log(`Final score: ${correctCount}/${questions.length} (${(correctCount / questions.length * 100).toFixed(2)}%)`);
       
       const scoreData = {
         correct: correctCount,
@@ -143,6 +143,33 @@ const TestPage: React.FC = () => {
       setSubmitting(false);
     }
   }, [questions, userAnswers, submitting, supabase, user, testId]);
+
+  const handleConfirmSubmit = () => {
+    const unansweredCount = userAnswers.filter(a => a.selectedOption === '').length;
+    openDialog(
+      <div className="dialog-content space-y-4">
+        <h3 className="text-lg font-semibold">Confirm Test Submission</h3>
+        {unansweredCount > 0 && (
+          <p className="text-yellow-600">
+            Warning: You have {unansweredCount} unanswered questions.
+          </p>
+        )}
+        <p>Are you sure you want to submit the test?</p>
+        <div className="flex justify-end space-x-2">
+          <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
+          <Button 
+            variant="primary" 
+            onClick={() => {
+              closeDialog();
+              handleSubmitTest();
+            }}
+          >
+            Submit Test
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!testId) {
@@ -379,11 +406,19 @@ const TestPage: React.FC = () => {
             Exit
           </Button>
           
-          <h1 className="text-xl font-semibold">{test?.title}</h1>
-          
-          <div className="flex items-center text-red-500">
-            <Clock size={18} className="mr-1" />
-            <span className="font-mono">{formatTime(timeRemaining)}</span>
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmSubmit}
+              isLoading={submitting}
+            >
+              Submit Test
+            </Button>
+            <div className="flex items-center text-red-500">
+              <Clock size={18} className="mr-1" />
+              <span className="font-mono">{formatTime(timeRemaining)}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -488,31 +523,10 @@ const TestPage: React.FC = () => {
         </div>
       </main>
 
-      {test && (
-        <Card className="test-details-card">
-          <Button 
-            onClick={() => openDialog(
-              <div className="dialog-content">
-                <h3>Start Test: {test.title}</h3>
-                <p>You will have {test.time_limit} minutes to complete this test.</p>
-                <p>Total questions: {test.questions_count}</p>
-                <Button onClick={() => {
-                  // Start test logic here
-                  closeDialog();
-                }}>Start Now</Button>
-                <Button onClick={closeDialog}>Cancel</Button>
-              </div>
-            )}
-          >
-            Start Test
-          </Button>
-        </Card>
-      )}
-
       <Dialog 
         isOpen={isDialogOpen}
         onClose={closeDialog}
-        title={test ? `${test.title}` : "Test Information"}
+        title="Submit Test"
       >
         {dialogContent}
       </Dialog>

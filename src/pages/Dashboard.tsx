@@ -5,7 +5,7 @@ import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
 import Dialog from '../components/Dialog';
 import Papa from 'papaparse';
-import { LogOut, Plus, Trash2, Upload, Settings } from 'lucide-react';
+import { LogOut, Plus, Trash2, Upload, Settings, FileSpreadsheet } from 'lucide-react';
 
 interface Test {
   test_id: string;
@@ -27,6 +27,18 @@ interface QuestionRow {
   'Option 3': string;
   'Option 4': string;
   'Answer': string;
+}
+
+interface TestAttempt {
+  attempt_id: string;
+  user_id: string;
+  test_id: string;
+  score: number;
+  total_questions: number;
+  percentage: number;
+  completed_at: string;
+  user_email?: string;
+  user_name?: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -53,6 +65,12 @@ const Dashboard: React.FC = () => {
   const [configTimeLimit, setConfigTimeLimit] = useState<number>(20);
   const [configQuestionsCount, setConfigQuestionsCount] = useState<number>(10);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
+  // Test attempts state
+  const [isAttemptsDialogOpen, setIsAttemptsDialogOpen] = useState<boolean>(false);
+  const [selectedTestAttempts, setSelectedTestAttempts] = useState<TestAttempt[]>([]);
+  const [loadingAttempts, setLoadingAttempts] = useState<boolean>(false);
+  const [selectedTestTitle, setSelectedTestTitle] = useState<string>('');
 
   useEffect(() => {
     const fetchUserAndTests = async () => {
@@ -348,6 +366,41 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleViewAttempts = async (testId: string, testTitle: string) => {
+    try {
+      setLoadingAttempts(true);
+      setSelectedTestTitle(testTitle);
+
+      const { data: attempts, error } = await supabase
+        .from('attempts')
+        .select(`
+          *,
+          users:user_id (
+            email,
+            name
+          )
+        `)
+        .eq('test_id', testId)
+        .order('completed_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedAttempts = attempts.map(attempt => ({
+        ...attempt,
+        user_email: attempt.users?.email,
+        user_name: attempt.users?.name
+      }));
+
+      setSelectedTestAttempts(formattedAttempts);
+      setIsAttemptsDialogOpen(true);
+    } catch (error) {
+      console.error('Error fetching attempts:', error);
+      alert('Error loading test attempts');
+    } finally {
+      setLoadingAttempts(false);
+    }
+  };
+
   if (loading || signingOut) {
     return (
       <div className="min-h-screen flex justify-center items-center bg-gray-100">
@@ -410,6 +463,15 @@ const Dashboard: React.FC = () => {
                       <span>{test.title}</span>
                       {test.created_by === user?.id && (
                         <div className="flex space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="flex items-center"
+                            onClick={() => handleViewAttempts(test.test_id, test.title)}
+                            isLoading={loadingAttempts}
+                          >
+                            <FileSpreadsheet size={14} />
+                          </Button>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -624,6 +686,66 @@ const Dashboard: React.FC = () => {
               </Button>
             </div>
           </form>
+        </Dialog>
+
+        {/* Test Attempts Dialog */}
+        <Dialog 
+          isOpen={isAttemptsDialogOpen} 
+          onClose={() => setIsAttemptsDialogOpen(false)}
+          title={`Test Attempts - ${selectedTestTitle}`}
+          maxWidth="xl"
+        >
+          <div className="overflow-x-auto">
+            {selectedTestAttempts.length === 0 ? (
+              <p className="text-center text-gray-500 py-4">No attempts yet</p>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                    <th scope="col" className="w-1/6 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                    <th scope="col" className="w-1/6 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Percentage</th>
+                    <th scope="col" className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed At</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {selectedTestAttempts.map((attempt) => (
+                    <tr key={attempt.attempt_id}>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        <div>
+                          <p className="font-medium">{attempt.user_name || 'Unknown User'}</p>
+                          <p className="text-gray-500 text-xs">{attempt.user_email}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {attempt.score}/{attempt.total_questions}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {attempt.percentage.toFixed(1)}%
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {new Date(attempt.completed_at).toLocaleString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button 
+              variant="secondary" 
+              onClick={() => setIsAttemptsDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
         </Dialog>
       </main>
     </div>

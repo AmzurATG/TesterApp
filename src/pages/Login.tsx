@@ -49,7 +49,7 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-gray-100 px-4">
       <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-8">Test Administration App</h1>
+        <h1 className="text-2xl font-bold text-center mb-8">Amzur Test Administration App</h1>
         
         <div className="text-center mb-8">
           <p className="text-gray-600 mb-4">Sign in to access tests and manage your assessments.</p>

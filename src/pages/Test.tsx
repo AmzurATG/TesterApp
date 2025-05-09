@@ -276,8 +276,26 @@ const TestPage: React.FC = () => {
         }
 
         console.log("Test data fetched:", testData);
-        setTest(testData);
-        setTimeRemaining(testData.time_limit * 60); // Convert minutes to seconds
+        
+        // Check for existing timer in localStorage
+        const storedEndTime = localStorage.getItem(`test_${testId}_end_time`);
+        if (storedEndTime) {
+          const endTime = parseInt(storedEndTime);
+          const now = Date.now();
+          const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+          
+          if (remaining > 0) {
+            setTimeRemaining(remaining);
+          } else {
+            handleSubmitTest();
+            return;
+          }
+        } else {
+          // Set new end time in localStorage
+          const endTime = Date.now() + (testData.time_limit * 60 * 1000);
+          localStorage.setItem(`test_${testId}_end_time`, endTime.toString());
+          setTimeRemaining(testData.time_limit * 60);
+        }
 
         // Fetch questions
         const { data: questionsData, error: questionsError } = await supabase
@@ -396,18 +414,22 @@ const TestPage: React.FC = () => {
     if (loading || testCompleted || !timeRemaining) return;
 
     const timer = setInterval(() => {
-      setTimeRemaining(prevTime => {
-        if (prevTime <= 1) {
+      const storedEndTime = localStorage.getItem(`test_${testId}_end_time`);
+      if (storedEndTime) {
+        const now = Date.now();
+        const remaining = Math.max(0, Math.floor((parseInt(storedEndTime) - now) / 1000));
+        
+        if (remaining <= 0) {
           clearInterval(timer);
           handleSubmitTest();
-          return 0;
+        } else {
+          setTimeRemaining(remaining);
         }
-        return prevTime - 1;
-      });
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [loading, testCompleted, timeRemaining, handleSubmitTest]);
+  }, [loading, testCompleted, timeRemaining, handleSubmitTest, testId]);
 
   const handleAnswerSelect = (questionId: string, option: string) => {
     console.log('Answer selected:', { questionId, optionIndex: option });

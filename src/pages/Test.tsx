@@ -171,6 +171,37 @@ const TestPage: React.FC = () => {
     );
   };
 
+  const handleConfirmExit = () => {
+    openDialog(
+      <div className="dialog-content space-y-4">
+        <h3 className="text-lg font-semibold">Confirm Exit</h3>
+        <p className="text-yellow-600">
+          Warning: Your test progress will be lost if you exit.
+        </p>
+        <p>Are you sure you want to exit the test?</p>
+        <div className="flex justify-end space-x-2">
+          <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
+          <Button 
+            variant="primary" 
+            onClick={() => {
+              // Clear all test related data from localStorage
+              if (testId) {
+                localStorage.removeItem(`test_${testId}_end_time`);
+                localStorage.removeItem(`test_${testId}_questions`);
+                localStorage.removeItem(`test_${testId}_answers`);
+                localStorage.removeItem(`test_${testId}_current_question`);
+              }
+              closeDialog();
+              navigate('/dashboard');
+            }}
+          >
+            Exit Test
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (!testId) {
       setError("No test ID provided");
@@ -185,7 +216,50 @@ const TestPage: React.FC = () => {
         
         console.log("Fetching test with ID:", testId);
 
-        // Fetch test details
+        // Check for stored questions and answers first
+        const storedQuestions = localStorage.getItem(`test_${testId}_questions`);
+        const storedAnswers = localStorage.getItem(`test_${testId}_answers`);
+        const storedIndex = localStorage.getItem(`test_${testId}_current_question`);
+        
+        if (storedQuestions && storedAnswers) {
+          setQuestions(JSON.parse(storedQuestions));
+          setUserAnswers(JSON.parse(storedAnswers));
+          if (storedIndex) {
+            setCurrentQuestionIndex(parseInt(storedIndex));
+          }
+          
+          // Still fetch test details for time limit
+          const { data: testData, error: testError } = await supabase
+            .from('tests')
+            .select('*')
+            .eq('test_id', testId)
+            .single();
+
+          if (testError) throw new Error(`Failed to load test: ${testError.message}`);
+          if (!testData) throw new Error("Test not found");
+
+          setTest(testData);
+          
+          // Handle timer logic
+          const storedEndTime = localStorage.getItem(`test_${testId}_end_time`);
+          if (storedEndTime) {
+            const endTime = parseInt(storedEndTime);
+            const now = Date.now();
+            const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+            
+            if (remaining > 0) {
+              setTimeRemaining(remaining);
+            } else {
+              handleSubmitTest();
+              return;
+            }
+          }
+          
+          setLoading(false);
+          return;
+        }
+
+        // If no stored data, proceed with normal fetch
         const { data: testData, error: testError } = await supabase
           .from('tests')
           .select('*')
@@ -295,6 +369,10 @@ const TestPage: React.FC = () => {
         }));
         setUserAnswers(initialAnswers);
 
+        // Store the selected questions and initial answers in localStorage
+        localStorage.setItem(`test_${testId}_questions`, JSON.stringify(selectedQuestions));
+        localStorage.setItem(`test_${testId}_answers`, JSON.stringify(initialAnswers));
+
       } catch (error: any) {
         console.error('Error fetching test data:', error);
         setError(error.message || "Failed to load test");
@@ -306,10 +384,27 @@ const TestPage: React.FC = () => {
     fetchTestAndQuestions();
   }, [testId, supabase, user]);
 
+  // Update answers in localStorage whenever they change
+  useEffect(() => {
+    if (testId && userAnswers.length > 0) {
+      localStorage.setItem(`test_${testId}_answers`, JSON.stringify(userAnswers));
+    }
+  }, [userAnswers, testId]);
+
+  // Update current question index in localStorage
+  useEffect(() => {
+    if (testId && !testCompleted) {
+      localStorage.setItem(`test_${testId}_current_question`, currentQuestionIndex.toString());
+    }
+  }, [currentQuestionIndex, testId, testCompleted]);
+
   // Clean up localStorage when test completes
   useEffect(() => {
     if (testCompleted && testId) {
       localStorage.removeItem(`test_${testId}_end_time`);
+      localStorage.removeItem(`test_${testId}_questions`);
+      localStorage.removeItem(`test_${testId}_answers`);
+      localStorage.removeItem(`test_${testId}_current_question`);
     }
   }, [testCompleted, testId]);
 
@@ -462,7 +557,7 @@ const TestPage: React.FC = () => {
           <Button 
             variant="secondary" 
             size="sm" 
-            onClick={() => navigate('/dashboard')}
+            onClick={handleConfirmExit}
             className="flex items-center"
           >
             <ArrowLeft size={16} className="mr-1" />

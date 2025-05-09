@@ -5,7 +5,8 @@ import Button from '../components/Button';
 import Card, { CardHeader, CardTitle, CardContent } from '../components/Card';
 import Dialog from '../components/Dialog';
 import Papa from 'papaparse';
-import { LogOut, Plus, Trash2, Upload, Settings, FileSpreadsheet } from 'lucide-react';
+import { LogOut, Plus, Trash2, Upload, Settings, FileSpreadsheet, Moon, Sun } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Test {
   test_id: string;
@@ -71,6 +72,8 @@ const Dashboard: React.FC = () => {
   const [selectedTestAttempts, setSelectedTestAttempts] = useState<TestAttempt[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState<boolean>(false);
   const [selectedTestTitle, setSelectedTestTitle] = useState<string>('');
+
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const fetchUserAndTests = async () => {
@@ -417,7 +420,15 @@ const Dashboard: React.FC = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <h1 className="text-xl font-semibold text-gray-900">Test Dashboard</h1>
-          <div className="flex items-center">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleTheme}
+              className="flex items-center"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </Button>
             {userProfile && (
               <span className="mr-4">{userProfile.name}</span>
             )}

@@ -202,27 +202,8 @@ const TestPage: React.FC = () => {
         }
 
         console.log("Test data fetched:", testData);
-        
-        // Check for existing timer in localStorage
-        const storedEndTime = localStorage.getItem(`test_${testId}_end_time`);
-        if (storedEndTime) {
-          const endTime = parseInt(storedEndTime);
-          const now = Date.now();
-          const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-          
-          if (remaining > 0) {
-            setTimeRemaining(remaining);
-          } else {
-            // Time's up, submit the test
-            handleSubmitTest();
-            return;
-          }
-        } else {
-          // Set new end time in localStorage
-          const endTime = Date.now() + (testData.time_limit * 60 * 1000);
-          localStorage.setItem(`test_${testId}_end_time`, endTime.toString());
-          setTimeRemaining(testData.time_limit * 60);
-        }
+        setTest(testData);
+        setTimeRemaining(testData.time_limit * 60); // Convert minutes to seconds
 
         // Fetch questions
         const { data: questionsData, error: questionsError } = await supabase
@@ -306,34 +287,23 @@ const TestPage: React.FC = () => {
     fetchTestAndQuestions();
   }, [testId, supabase, user]);
 
-  // Clean up localStorage when test completes
-  useEffect(() => {
-    if (testCompleted && testId) {
-      localStorage.removeItem(`test_${testId}_end_time`);
-    }
-  }, [testCompleted, testId]);
-
   // Timer effect
   useEffect(() => {
     if (loading || testCompleted || !timeRemaining) return;
 
     const timer = setInterval(() => {
-      const storedEndTime = localStorage.getItem(`test_${testId}_end_time`);
-      if (storedEndTime) {
-        const now = Date.now();
-        const remaining = Math.max(0, Math.floor((parseInt(storedEndTime) - now) / 1000));
-        
-        if (remaining <= 0) {
+      setTimeRemaining(prevTime => {
+        if (prevTime <= 1) {
           clearInterval(timer);
           handleSubmitTest();
-        } else {
-          setTimeRemaining(remaining);
+          return 0;
         }
-      }
+        return prevTime - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [loading, testCompleted, timeRemaining, handleSubmitTest, testId]);
+  }, [loading, testCompleted, timeRemaining, handleSubmitTest]);
 
   const handleAnswerSelect = (questionId: string, option: string) => {
     console.log('Answer selected:', { questionId, optionIndex: option });
